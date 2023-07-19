@@ -1,11 +1,73 @@
 // @ts-ignore
-import { defineTest } from 'jscodeshift/dist/testUtils';
+import { defineTest, defineInlineTest } from 'jscodeshift/dist/testUtils';
+import transform from "../transform";
 
 defineTest(__dirname, 'transform', null, 'assert', { parser: 'ts' });
 defineTest(__dirname, 'transform', null, 'importBoth', { parser: 'ts' });
 defineTest(__dirname, 'transform', null, 'require', { parser: 'ts' });
 defineTest(__dirname, 'transform', null, 'transform', { parser: 'ts' });
 defineTest(__dirname, 'transform', null, 'type', { parser: 'ts' });
+
+describe('manipulation', () => {
+  defineInlineTest(transform, null,
+      `
+      import moment from 'moment';
+      moment().startOf('quarter');
+      `,
+      `
+      import dayjs from 'dayjs';
+      import quarterOfYear from 'dayjs/plugin/quarterOfYear';
+      dayjs.extend(quarterOfYear);
+      dayjs().startOf('quarter');
+      `,
+      'test startOf quarter import with plugin'
+  );
+
+  defineInlineTest(transform, null,
+      `
+      import moment from 'moment';
+      moment().endOf('quarter');
+      `,
+      `
+      import dayjs from 'dayjs';
+      import quarterOfYear from 'dayjs/plugin/quarterOfYear';
+      dayjs.extend(quarterOfYear);
+      dayjs().endOf('quarter');
+      `,
+      'test endOf quarter import with plugin'
+  );
+
+  defineInlineTest(transform, null,
+      `
+      import moment from 'moment';
+      moment().startOf('isoWeek');
+      `,
+      `
+      import dayjs from 'dayjs';
+      import isoWeek from 'dayjs/plugin/isoWeek';
+      dayjs.extend(isoWeek);
+      dayjs().startOf('isoWeek');
+      `,
+      'test startOf isoWeek import with plugin'
+  );
+
+  defineInlineTest(transform, null,
+      `
+      import moment from 'moment';
+      moment().endOf('isoWeek');
+      `,
+      `
+      import dayjs from 'dayjs';
+      import isoWeek from 'dayjs/plugin/isoWeek';
+      dayjs.extend(isoWeek);
+      dayjs().endOf('isoWeek');
+      `,
+      'test endOf isoWeek import with plugin'
+  );
+
+});
+
+
 describe('plugins', () => {
   defineTest(__dirname, 'transform', null, 'plugins/arraySupport', { parser: 'ts' });
   defineTest(__dirname, 'transform', null, 'plugins/calendar', { parser: 'ts' });

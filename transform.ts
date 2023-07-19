@@ -228,6 +228,14 @@ const plugins: Plugin[] = [
   {
     name: 'isoWeek',
     properties: ['isoWeek', 'isoWeekday', 'isoWeekYear'],
+    find: (path: ASTPath<any>) => {
+      const propertyName = getPropertyName(path);
+      const args = path.node?.arguments;
+      return (
+          ['add', 'subtract', 'startOf', 'endOf'].includes(propertyName) &&
+          ['isoWeek'].includes(args?.[0]?.value)
+      );
+    }
   },
   {
     name:'isoWeeksInYear',
@@ -259,6 +267,14 @@ const plugins: Plugin[] = [
   {
     name: 'quarterOfYear',
     properties: ['quarter'],
+    find: (path: ASTPath<any>) => {
+        const propertyName = getPropertyName(path);
+        const args = path.node?.arguments;
+        return (
+            ['add', 'subtract', 'startOf', 'endOf'].includes(propertyName) &&
+            ['quarter', 'quarters'].includes(args?.[0]?.value)
+        );
+    }
   },
   {
     name: 'relativeTime',
