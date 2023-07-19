@@ -23,6 +23,7 @@ const singleUnits = [
   'hour',
   'minute',
   'second',
+  'quarter',
 ];
 
 const multipleUnits = [
@@ -34,6 +35,7 @@ const multipleUnits = [
   'hours',
   'minutes',
   'seconds',
+  'quarters',
 ];
 
 const units = [...singleUnits, ...multipleUnits];
@@ -237,6 +239,10 @@ const plugins: Plugin[] = [
         args?.[0]?.type?.toString() === 'ObjectExpression'
       );
     },
+  },
+  {
+    name: 'quarterOfYear',
+    properties: ['quarter'],
   },
   {
     name: 'relativeTime',
