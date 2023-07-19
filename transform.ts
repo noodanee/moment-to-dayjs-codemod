@@ -194,6 +194,10 @@ const plugins: Plugin[] = [
     },
   },
   {
+    name: 'calendar',
+    properties: ['calendar'],
+  },
+  {
     name: 'dayOfYear',
     properties: ['dayOfYear'],
   },
