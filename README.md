@@ -5,71 +5,43 @@ A [jscodeshift](https://github.com/facebook/jscodeshift) tranformer for migratin
 ## How to use
 
 ```sh
-$ npm install -g jscodeshift moment-to-dayjs-codemod
-
-# dry run
-$ jscodeshift -t node_modules/moment-to-dayjs-codemod/transform.js -d -p path/to/file.ts
-
-# exec
-$ jscodeshift -t node_modules/moment-to-dayjs-codemod/transform.js path/to/file.ts
-```
-
-local use
-```sh
-$ git clone https://github.com/yanaemon/moment-to-dayjs-codemod.git
+$ git clone https://github.com/noodanee/moment-to-dayjs-codemod.git
 $ cd moment-to-dayjs-codemod
 $ npm install
 
 # dry run
-$ npm run-script transform -- -d -p path/to/file.ts
+$ npm run transform -- -d -p path/to/file
 
 # exec
-$ npm run-script transform -- path/to/file.ts
+$ npm run transform -- path/to/file
 ```
 
 ## Supported dayjs plugins
 
 - [x] [arraySupport](https://day.js.org/docs/en/plugin/array-support)
+- [x] [calendar](https://day.js.org/docs/en/plugin/calendar)
+- [x] [dayOfYear](https://day.js.org/docs/en/plugin/day-of-year)
 - [x] [duration](https://day.js.org/docs/en/plugin/duration)
 - [x] [isBetween](https://day.js.org/docs/en/plugin/is-between)
+- [x] [isLeapYear](https://day.js.org/docs/en/plugin/is-leap-year)
+- [x] [isoWeek](https://day.js.org/docs/en/plugin/iso-week)
+- [x] [isoWeeksInYear](https://day.js.org/docs/en/plugin/iso-weeks-in-year)
 - [x] [isSameOrAfter](https://day.js.org/docs/en/plugin/is-same-or-after)
 - [x] [isSameOrBefore](https://day.js.org/docs/en/plugin/is-same-or-before)
-- [x] [isoWeek](https://day.js.org/docs/en/plugin/iso-week)
+- [x] [localeData](https://day.js.org/docs/en/plugin/locale-data)
 - [x] [minMax](https://day.js.org/docs/en/plugin/min-max)
 - [x] [objectSupport](https://day.js.org/docs/en/plugin/object-support)
+- [x] [quarterOfYear](https://day.js.org/docs/en/plugin/quarter-of-year)
 - [x] [relativeTime](https://day.js.org/docs/en/plugin/relative-time)
-- [ ] [updateLocale](https://day.js.org/docs/en/plugin/update-locale)
+- [x] [toArray](https://day.js.org/docs/en/plugin/to-array)
+- [x] [toObject](https://day.js.org/docs/en/plugin/to-object)
+- [x] [updateLocale](https://day.js.org/docs/en/plugin/update-locale)
 - [x] [utc](https://day.js.org/docs/en/plugin/utc)
 - [x] [weekday](https://day.js.org/docs/en/plugin/weekday)
-
-## Warning
-
-This lib cannot detect and don't replace below case.
-Please check whether there is no such a case.
-
-#### destructive use
-
-Because moment.js is mutable but dayjs is immutable.
-
-ex.
-```
-for (const d = moment(); d.add(1, 'date'); d++) {
-  console.log(d.toDate());
-}
-```
-
-#### variable assign
-
-ex.
-```
-const d = moment();
-// error unless you use objectSupport plugin
-console.log(d.add({ date: 1 }).toDate());
-```
-
-I recommend to use [ObjectSupport](https://day.js.org/docs/en/plugin/object-support) plugin
+- [x] [weekOfYear](https://day.js.org/docs/en/plugin/week-of-year)
+- [x] [weekYear](https://day.js.org/docs/en/plugin/week-year)
 
 ## Test
 ```
-$ yarn jest
+$ npm run test
 ```
