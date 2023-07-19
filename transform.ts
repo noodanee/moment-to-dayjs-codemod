@@ -275,7 +275,6 @@ const plugins: Plugin[] = [
   {
     name: 'updateLocale',
     properties: ['updateLocale'],
-    notImplemented: true,
   },
   {
     name: 'utc',
