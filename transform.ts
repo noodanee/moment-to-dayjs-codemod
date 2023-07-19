@@ -455,6 +455,7 @@ const transform: Transform = (file: FileInfo, api: API) => {
       path.replace(replacement);
     }
   };
+
   root
     .find(j.CallExpression, {
       callee: {
@@ -518,6 +519,52 @@ const transform: Transform = (file: FileInfo, api: API) => {
             }),
           ],
         })
+      );
+    });
+
+  const dRequires = root.find(j.VariableDeclaration, {
+    declarations: [
+      {
+        id: {
+          name: 'dayjs'
+        },
+        init: {
+          callee: {
+            name: 'require'
+          }
+        },
+      },
+    ],
+  });
+  const dRequire = dRequires.nodes().length > 0 && dRequires.at(-1).get();
+    Array.from(foundPlugins)
+    .sort()
+    .reverse()
+    .forEach((p) => {
+      if (!dRequire) {
+        return;
+      }
+      dRequire.insertAfter(
+          j.expressionStatement.from({
+            expression: j.callExpression.from({
+              callee: j.memberExpression.from({
+                object: j.identifier('dayjs'),
+                property: j.identifier('extend'),
+              }),
+              arguments: [j.identifier(p)],
+            }),
+          })
+      );
+      dRequire.insertAfter(
+          j.variableDeclaration('const', [
+            j.variableDeclarator(
+                j.identifier(p),
+                j.callExpression.from({
+                  callee: j.identifier('require'),
+                  arguments: [j.literal(`dayjs/plugin/${p}`)],
+                })
+            ),
+          ])
       );
     });
 
