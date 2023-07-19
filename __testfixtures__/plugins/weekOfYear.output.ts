@@ -5,6 +5,8 @@ dayjs.extend(weekOfYear);
 const main = () => {
     dayjs().week(1);
     dayjs().week();
+    dayjs().week(1);
+    dayjs().week();
 };
 
 main();
