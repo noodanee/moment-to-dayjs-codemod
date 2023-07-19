@@ -214,8 +214,16 @@ const plugins: Plugin[] = [
     properties: ['isSameOrBefore'],
   },
   {
+    name: 'isLeapYear',
+    properties: ['isLeapYear', 'isoWeeksInYear'],
+  },
+  {
     name: 'isoWeek',
     properties: ['isoWeek', 'isoWeekday', 'isoWeekYear'],
+  },
+  {
+    name:'isoWeeksInYear',
+    properties: ['isoWeeksInYear'],
   },
   {
     name: 'minMax',
@@ -277,7 +285,7 @@ const plugins: Plugin[] = [
   {
     name: 'weekYear',
     properties: ['weekYear'],
-  }
+  },
 ];
 
 const transform: Transform = (file: FileInfo, api: API) => {
