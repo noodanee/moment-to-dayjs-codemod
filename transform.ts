@@ -272,7 +272,11 @@ const plugins: Plugin[] = [
   },
   {
     name: 'weekOfYear',
-    properties: ['week'],
+    properties: ['week', 'weekYear'],
+  },
+  {
+    name: 'weekYear',
+    properties: ['weekYear'],
   }
 ];
 
