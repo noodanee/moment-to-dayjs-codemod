@@ -264,6 +264,10 @@ const plugins: Plugin[] = [
     },
     replace: replaceGetSetToFunction,
   },
+  {
+    name: 'weekOfYear',
+    properties: ['week'],
+  }
 ];
 
 const transform: Transform = (file: FileInfo, api: API) => {
