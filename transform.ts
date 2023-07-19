@@ -2,7 +2,7 @@ import {
   API,
   ASTPath,
   CallExpression,
-  FileInfo,
+  FileInfo, Identifier,
   JSCodeshift,
   Transform,
 } from 'jscodeshift';
@@ -504,11 +504,19 @@ const transform: Transform = (file: FileInfo, api: API) => {
 
   // type
   root
-    .find(j.TSTypeReference, (value) =>
-      [value.typeName?.name || value.typeName?.right.name].some((name) =>
-        ['Moment', 'MomentInput'].includes(name)
-      )
-    )
+    .find(j.TSTypeReference, (value) => {
+      if (value?.typeName?.type === 'TSQualifiedName') {
+        const left = value.typeName.left as Identifier
+        const right = value.typeName.right as Identifier
+        if (left) {
+          return left.name === 'moment' && (right?.name === 'Moment' || right?.name === 'MomentInput');
+        }
+      }
+      if (value?.typeName?.type === 'Identifier') {
+        return value.typeName.name === 'Moment' || value.typeName.name === 'MomentInput';
+      }
+      return false;
+    })
     .replaceWith(() => {
       return j.tsTypeReference.from({
         typeName: j.tsQualifiedName.from({
@@ -516,6 +524,24 @@ const transform: Transform = (file: FileInfo, api: API) => {
           right: j.identifier('Dayjs'),
         }),
       });
+    });
+
+  // moment.isMoment() to dayjs.isDayjs()
+    root.find(j.CallExpression, {
+      callee: {
+        property: {
+          name: 'isMoment',
+        },
+      }
+    })
+      .replaceWith( (path: ASTPath<any>) => {
+        return j.callExpression.from({
+          callee: j.memberExpression.from({
+            object: j.identifier('dayjs'),
+            property: j.identifier('isDayjs'),
+          }),
+          arguments: path.node.arguments,
+        });
     });
 
   return root.toSource({
