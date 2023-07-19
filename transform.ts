@@ -218,6 +218,10 @@ const plugins: Plugin[] = [
     properties: ['isSameOrBefore'],
   },
   {
+    name: 'localeData',
+    properties: ['localeData'],
+  },
+  {
     name: 'isLeapYear',
     properties: ['isLeapYear', 'isoWeeksInYear'],
   },
