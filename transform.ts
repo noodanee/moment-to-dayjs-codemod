@@ -192,6 +192,10 @@ const plugins: Plugin[] = [
     },
   },
   {
+    name: 'dayOfYear',
+    properties: ['dayOfYear'],
+  },
+  {
     name: 'duration',
     properties: ['duration', 'isDuration', 'humanize'],
   },
@@ -336,7 +340,7 @@ const transform: Transform = (file: FileInfo, api: API) => {
   // after  : dayjs.xxx().yyy()
   root
   .find(j.MemberExpression, {
-    object: { 
+    object: {
       callee: {
         object: { name: 'moment' },
       }

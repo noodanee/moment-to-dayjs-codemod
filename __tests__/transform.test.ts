@@ -9,6 +9,9 @@ describe('plugins', () => {
   defineTest(__dirname, 'transform', null, 'plugins/arraySupport', {
     parser: 'ts',
   });
+  defineTest(__dirname, 'transform', null, 'plugins/dayOfYear', {
+    parser: 'ts',
+  });
   defineTest(__dirname, 'transform', null, 'plugins/duration', { parser: 'ts' });
   defineTest(__dirname, 'transform', null, 'plugins/isBetween', {
     parser: 'ts',
