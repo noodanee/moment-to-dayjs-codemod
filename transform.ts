@@ -261,6 +261,10 @@ const plugins: Plugin[] = [
     properties: ['from', 'fromNow', 'to', 'toNow', 'humanize'],
   },
   {
+    name: 'toArray',
+    properties: ['toArray'],
+  },
+  {
     name: 'updateLocale',
     properties: ['updateLocale'],
     notImplemented: true,
