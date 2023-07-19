@@ -110,7 +110,7 @@ test.each([
     dayjs.min([dayjs(now), dayjs('2018-01-01'), dayjs('2019-01-01')]),
   ],
 ])('minMax %#', (m, d) => {
-  expect(d.toDate()).toEqual(m.toDate());
+  expect(d?.toDate()).toEqual(m.toDate());
 });
 
 import objectSupport from 'dayjs/plugin/objectSupport';

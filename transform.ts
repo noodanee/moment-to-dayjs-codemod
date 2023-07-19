@@ -281,6 +281,18 @@ const transform: Transform = (file: FileInfo, api: API) => {
     });
   };
 
+  const dayjsVariableDeclaration = () => {
+    return j.variableDeclaration('const', [
+      j.variableDeclarator(
+        j.identifier('dayjs'),
+        j.callExpression.from({
+          callee: j.identifier('require'),
+          arguments: [j.literal('dayjs')],
+        })
+      ),
+    ]);
+  }
+
   const foundPlugins = new Set<string>();
   const checkPlugins = (path: ASTPath<any>) => {
     const newPlugins = plugins.filter((plugin) => {
@@ -311,14 +323,14 @@ const transform: Transform = (file: FileInfo, api: API) => {
 
   // replace require statement
   // before : const moment = require('moment')
-  // after  : import dayjs from 'dayjs'
+  // after  : const dayjs = require('dayjs')
   root
     .find(j.VariableDeclaration)
     .filter((path: ASTPath<any>) => {
       const d = path?.node?.declarations?.[0];
       return d?.init?.callee?.name === 'require' && d?.id?.name === 'moment';
     })
-    .replaceWith(dayjsImportDeclaration);
+    .replaceWith(dayjsVariableDeclaration);
 
   // before : moment.xxx().yyy()
   // after  : dayjs.xxx().yyy()
