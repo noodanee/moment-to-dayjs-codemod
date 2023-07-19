@@ -265,6 +265,10 @@ const plugins: Plugin[] = [
     properties: ['toArray'],
   },
   {
+    name: 'toObject',
+    properties: ['toObject'],
+  },
+  {
     name: 'updateLocale',
     properties: ['updateLocale'],
     notImplemented: true,

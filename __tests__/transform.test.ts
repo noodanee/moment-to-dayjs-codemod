@@ -21,6 +21,7 @@ describe('plugins', () => {
   defineTest(__dirname, 'transform', null, 'plugins/quarterOfYear', { parser: 'ts' });
   defineTest(__dirname, 'transform', null, 'plugins/relativeTime', { parser: 'ts' });
   defineTest(__dirname, 'transform', null, 'plugins/toArray', { parser: 'ts' });
+  defineTest(__dirname, 'transform', null, 'plugins/toObject', { parser: 'ts' });
   defineTest(__dirname, 'transform', null, 'plugins/utc', { parser: 'ts' });
   defineTest(__dirname, 'transform', null, 'plugins/weekday', { parser: 'ts' });
   defineTest(__dirname, 'transform', null, 'plugins/weekOfYear', { parser: 'ts' });
