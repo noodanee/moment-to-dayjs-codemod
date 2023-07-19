@@ -42,6 +42,7 @@ const main = () => {
   moment().add(1, 'minutes').toDate();
   moment().add(1, 'second').toDate();
   moment().add(1, 'seconds').toDate();
+  moment().add(1, 'quarters').toDate();
 };
 
 main();
