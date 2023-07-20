@@ -4,8 +4,8 @@
   "description": "Transforms JS/TS files from moment to dayjs",
   "main": "transform.ts",
   "author": {
-    "name": "Hiroki Shirayanagi",
-    "url": "https://github.com/yanaemon"
+    "name": "noodanee",
+    "url": "https://github.com/noodanee"
   },
   "license": "MIT",
   "scripts": {
@@ -21,12 +21,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yanaemon/moment-to-dayjs-codemod.git"
+    "url": "git+https://github.com/noodanee/moment-to-dayjs-codemod.git"
   },
   "bugs": {
-    "url": "https://github.com/yanaemon/moment-to-dayjs-codemod/issues"
+    "url": "https://github.com/noodanee/moment-to-dayjs-codemod/issues"
   },
-  "homepage": "https://github.com/yanaemon/moment-to-dayjs-codemod#readme",
+  "homepage": "https://github.com/noodanee/moment-to-dayjs-codemod#readme",
   "dependencies": {},
   "devDependencies": {
     "@types/jest": "^29.5.2",
