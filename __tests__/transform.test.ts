@@ -453,6 +453,20 @@ describe('plugins', () => {
             `,
             'test minMax plugin'
         );
+
+        defineInlineTest(transform, null,
+            `
+            import moment from 'moment';
+            Math.min(moment('2018-01-01'), moment('2019-01-01'));
+            Math.max(moment('2018-01-01'), moment('2019-01-01'));
+            `,
+            `
+            import dayjs from 'dayjs';
+            Math.min(dayjs('2018-01-01'), dayjs('2019-01-01'));
+            Math.max(dayjs('2018-01-01'), dayjs('2019-01-01'));
+            `,
+            'test Math property do not load plugins'
+        );
     });
 
     describe('objectSupport', () => {

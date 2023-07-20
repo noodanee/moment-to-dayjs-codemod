@@ -47,6 +47,14 @@ const includesProperties = (path: ASTPath<any>, properties: string[]) => {
   return properties.includes(propertyName);
 };
 
+const getCalleeName = (path: ASTPath<any>) => {
+    const callee = path.node?.callee;
+    if (callee.type === 'MemberExpression') {
+        return callee.object.name;
+    }
+    return callee.name;
+}
+
 /**
  * before : xxx({ days: 1 })
  * after  : xxx({ day: 1 })
@@ -243,7 +251,13 @@ const plugins: Plugin[] = [
   },
   {
     name: 'minMax',
-    properties: ['max', 'min'],
+    find: (path: ASTPath<any>) => {
+        const propertyName = getPropertyName(path);
+        return (
+            ['min', 'max'].includes(propertyName) &&
+            getCalleeName(path) === 'dayjs'
+        );
+    }
   },
   {
     name: 'objectSupport',
