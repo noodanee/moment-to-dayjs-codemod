@@ -403,6 +403,52 @@ const transform: Transform = (file: FileInfo, api: API) => {
     })
     .replaceWith(dayjsVariableDeclaration);
 
+  // moment.isMoment() to dayjs.isDayjs()
+  root.find(j.CallExpression, {
+    callee: {
+      object: {
+        name: 'moment',
+      },
+      property: {
+        name: 'isMoment',
+      },
+    }
+  })
+      .replaceWith( (path: ASTPath<any>) => {
+        return j.callExpression.from({
+          callee: j.memberExpression.from({
+            object: j.identifier('dayjs'),
+            property: j.identifier('isDayjs'),
+          }),
+          arguments: path.node.arguments,
+        });
+      });
+
+  // moment.now() to dayjs().valueOf()
+    root.find(j.CallExpression, {
+        callee: {
+            object: {
+                name: 'moment',
+            },
+            property: {
+                name: 'now',
+            },
+        },
+      arguments: []
+    })
+        .replaceWith( (path: ASTPath<any>) => {
+            return j.callExpression.from({
+                callee: j.memberExpression.from({
+                    object: j.callExpression.from({
+                      callee: j.identifier('dayjs'),
+                      arguments: []
+                    }),
+                    property: j.identifier('valueOf'),
+                }),
+                arguments: [],
+            });
+        });
+
   // before : moment.xxx().yyy()
   // after  : dayjs.xxx().yyy()
   root
@@ -604,24 +650,6 @@ const transform: Transform = (file: FileInfo, api: API) => {
           right: j.identifier('Dayjs'),
         }),
       });
-    });
-
-  // moment.isMoment() to dayjs.isDayjs()
-    root.find(j.CallExpression, {
-      callee: {
-        property: {
-          name: 'isMoment',
-        },
-      }
-    })
-      .replaceWith( (path: ASTPath<any>) => {
-        return j.callExpression.from({
-          callee: j.memberExpression.from({
-            object: j.identifier('dayjs'),
-            property: j.identifier('isDayjs'),
-          }),
-          arguments: path.node.arguments,
-        });
     });
 
   return root.toSource({

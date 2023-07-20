@@ -240,6 +240,20 @@ describe('manipulation', () => {
 
 });
 
+describe('now', () => {
+    defineInlineTest(transform, null,
+        `
+        import moment from 'moment';
+        moment.now();
+        `,
+        `
+        import dayjs from 'dayjs';
+        dayjs().valueOf();
+        `,
+        'test now'
+    );
+})
+
 describe('plugins', () => {
 
     describe('arraySupport', () => {
