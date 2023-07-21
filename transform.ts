@@ -78,7 +78,7 @@ const replaceObjectArgument = (j: JSCodeshift, path: ASTPath<any>) => {
     }
 
     const needReplace = args.some((a: any) =>
-        units.includes(a.properties[0].key.name)
+        units.includes(a.properties[0].key?.name)
     );
     if (!needReplace) {
         return null;
