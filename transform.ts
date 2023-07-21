@@ -4,7 +4,7 @@ import {
     CallExpression,
     FileInfo, Identifier,
     JSCodeshift,
-    Transform,
+    Transform, VariableDeclaration, VariableDeclarator,
 } from 'jscodeshift';
 
 /**
@@ -192,7 +192,7 @@ const replaceImportDeclaration = (j: JSCodeshift, path: ASTPath<any>) => {
         const node = path.node;
 
         const value = node?.source?.value;
-        if (typeof value === 'string'){
+        if (typeof value === 'string' && value === 'dayjs') {
             if (cache[value]) {
                 return true;
             }
@@ -220,6 +220,25 @@ const replaceRequireDeclaration = (j: JSCodeshift, path: ASTPath<any>) => {
                 ),
             ]);
         });
+
+    // duplicate require
+    const cache: any = {};
+    j(path).find(j.VariableDeclaration).filter((path) => {
+        const node = path.node;
+
+        if (node.type !== 'VariableDeclaration') return false;
+        const d = node?.declarations?.[0];
+        if (d.type !== 'VariableDeclarator' || d?.init?.type !== 'CallExpression') return false;
+        const callee = d?.init?.callee;
+        if (callee.type !== 'Identifier' || d.id.type !== 'Identifier') return false;
+        if (callee.name === 'require' && d?.id?.name === 'dayjs') {
+            if (cache[d.id.name]) {
+                return true;
+            }
+            cache[d.id.name] = true;
+        }
+        return false;
+    }).remove();
 }
 
 // moment.isMoment() to dayjs.isDayjs()

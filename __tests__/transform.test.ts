@@ -35,6 +35,21 @@ describe('import both', () => {
         `,
         'test import both'
     );
+
+    defineInlineTest(transform, null,
+        `
+        const dayjs = require('dayjs');
+        const moment = require('moment');
+        dayjs('2021-01-01').toDate();
+        moment('2021-01-01').toDate();
+        `,
+        `
+        const dayjs = require('dayjs');
+        dayjs('2021-01-01').toDate();
+        dayjs('2021-01-01').toDate();
+        `,
+        'test require both'
+    );
 })
 
 describe('require', () => {
