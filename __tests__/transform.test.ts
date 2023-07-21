@@ -254,6 +254,34 @@ describe('now', () => {
     );
 })
 
+describe('i18n', () => {
+    defineInlineTest(transform, null,
+        `
+        import moment from 'moment';
+        moment.locale('zh-CN');
+        `,
+        `
+        import dayjs from 'dayjs';
+        import 'dayjs/locale/zh-cn';
+        dayjs.locale('zh-cn');
+        `,
+        'test esm locale'
+    );
+
+    defineInlineTest(transform, null,
+        `
+        const moment = require('moment');
+        moment.locale('zh-CN');
+        `,
+        `
+        const dayjs = require('dayjs');
+        require('dayjs/locale/zh-cn');
+        dayjs.locale('zh-cn');
+        `,
+        'test cjs locale'
+    );
+})
+
 describe('plugins', () => {
 
     describe('arraySupport', () => {
