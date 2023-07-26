@@ -2,10 +2,24 @@ import {
     API,
     ASTPath,
     CallExpression,
-    FileInfo, Identifier,
+    Collection,
+    FileInfo,
+    Identifier,
     JSCodeshift,
-    Transform, VariableDeclaration, VariableDeclarator,
+    Transform,
+    VariableDeclaration,
+    VariableDeclarator,
 } from 'jscodeshift';
+
+type Next = () => Promise<void>;
+
+type Plugin = {
+    name: string;
+    properties?: string[];
+    find?: (path: ASTPath<any>) => boolean;
+    replace?: (j: JSCodeshift, path: ASTPath<any>) => CallExpression | null;
+    notImplemented?: boolean;
+};
 
 /**
  * @param str unit string
@@ -23,7 +37,9 @@ const singleUnits = [
     'hour',
     'minute',
     'second',
+    'millisecond',
     'quarter',
+    'weekday',
 ];
 
 const multipleUnits = [
@@ -35,146 +51,191 @@ const multipleUnits = [
     'hours',
     'minutes',
     'seconds',
+    'milliseconds',
     'quarters',
+    'weekdays',
 ];
 
 const units = [...singleUnits, ...multipleUnits];
 
 const getPropertyName = (path: ASTPath<any>) => {
     return path.node?.callee?.property?.name ?? path.node?.property?.name;
-}
+};
 
 const includesProperties = (path: ASTPath<any>, properties: string[]) => {
     const propertyName = getPropertyName(path);
     return properties.includes(propertyName);
 };
 
-const getCalleeName = (path: ASTPath<any>) => {
-    const callee = path.node?.callee;
-    if (callee?.type === 'MemberExpression') {
-        return callee.object.name;
-    }
-    if (callee?.type === 'Identifier') {
-        return callee.name;
-    }
-    return callee?.name;
-}
+const getImportStatement = (j: JSCodeshift, root: Collection<any>) => {
+    const dImports = root.find(j.ImportDeclaration, {
+        source: {
+            value: 'dayjs',
+        },
+    });
+    return (dImports.nodes().length > 0 && dImports.at(-1).get()) || null;
+};
 
-const getArguments = (path: ASTPath<any>) => {
-    return path.node?.arguments;
-}
+const getRequireStatement = (j: JSCodeshift, root: Collection<any>) => {
+    const dRequires = root.find(j.VariableDeclaration, {
+        declarations: [
+            {
+                id: {
+                    name: 'dayjs',
+                },
+                init: {
+                    callee: {
+                        name: 'require',
+                    },
+                },
+            },
+        ],
+    });
+    return (dRequires.nodes().length > 0 && dRequires.at(-1).get()) || null;
+};
 
-/**
- * before : xxx({ days: 1 })
- * after  : xxx({ day: 1 })
- * @param j JSCodeshift Object
- * @param path ASTPath Object
- * @returns return new node. return null if not need to replace.
- */
-const replaceObjectArgument = (j: JSCodeshift, path: ASTPath<any>) => {
-    const args = path.node?.arguments;
-    if (!args?.[0]?.properties?.length) {
-        return null;
-    }
-
-    const needReplace = args.some((a: any) =>
-        units.includes(a.properties[0].key?.name)
-    );
-    if (!needReplace) {
-        return null;
-    }
-
-    const newArgs = args.map((a: any) => {
-        return {
-            ...a,
-            properties: a.properties.map((p: any) => {
-                const includeUnit = units.includes(p.key.name);
+// before : xxx({ days: 1 })
+// after  : xxx({ day: 1 })
+const replaceObjectArgument = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.CallExpression, (path: any) => {
+        return (
+            path.callee?.name === 'moment' &&
+            path.arguments?.[0]?.type === 'ObjectExpression' &&
+            path.arguments?.some((arg: any) =>
+                units.includes(arg.properties[0].key?.name)
+            )
+        );
+    }).replaceWith((path: ASTPath<any>) => {
+        return j.callExpression.from({
+            ...path.node,
+            arguments: path.node.arguments.map((arg: any) => {
                 return {
-                    ...p,
-                    key: includeUnit ? j.identifier(toSingle(p.key.name)) : p.key,
+                    ...arg,
+                    properties: arg.properties.map((p: any) => {
+                        const includeUnit = units.includes(p.key.name);
+                        return {
+                            ...p,
+                            key: includeUnit
+                                ? j.identifier(toSingle(p.key.name))
+                                : p.key,
+                        };
+                    }),
                 };
             }),
-        };
+        });
     });
-
-    return j.callExpression.from({
-        ...path.node,
-        arguments: newArgs,
-    });
+    await next();
 };
 
-/**
- * before : xxx(1, 'days')
- * after  : xxx(1, 'day')
- * @param j JSCodeshift Object
- * @param path ASTPath Object
- * @returns return new node. return null if not need to replace.
- */
-const replaceArrayArugment = (j: JSCodeshift, path: ASTPath<any>) => {
-    const args = path.node?.arguments;
-    if (!args?.length) {
-        return null;
-    }
-
-    const needReplace = args.some((a: any) => units.includes(a.value));
-    if (!needReplace) {
-        return null;
-    }
-
-    const newArgs = args.map((a: any) => {
-        const includeUnit = units.includes(a.value);
-        return includeUnit ? j.literal(toSingle(a.value)) : a;
+// before : xxx(1, 'days')
+// after  : xxx(1, 'day')
+const replaceArrayArgument = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.CallExpression, (path: any) => {
+        return (
+            path.callee?.object?.callee?.name === 'moment' &&
+            path.arguments?.some((arg: any) => units.includes(arg.value))
+        );
+    }).replaceWith((path: ASTPath<any>) => {
+        return j.callExpression.from({
+            ...path.node,
+            arguments: path.node.arguments.map((arg: any) => {
+                const includeUnit = units.includes(arg.value);
+                return includeUnit ? j.literal(toSingle(arg.value)) : arg;
+            }),
+        });
     });
 
-    return j.callExpression.from({
-        ...path.node,
-        arguments: newArgs,
-    });
+    await next();
 };
 
-/**
- * before : days()
- * after  : day()
- * @param j JSCodeshift Object
- * @param path ASTPath Object
- * @returns return new node. return null if not need to replace.
- */
-const replaceUnitFunction = (j: JSCodeshift, path: ASTPath<any>) => {
-    const propertyName = getPropertyName(path);
-    if (!multipleUnits.includes(propertyName)) {
-        return null;
-    }
-
-    const newCallee = j.memberExpression.from({
-        ...path.node.callee,
-        property: j.identifier(toSingle(propertyName)),
+// before : days()
+// after  : day()
+const replaceUnitFunction = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.CallExpression, (path: any) => {
+        const calleeName = path.callee?.object?.callee?.name;
+        if (calleeName !== 'moment') return false;
+        const propertyName = path.callee?.property?.name;
+        return multipleUnits.includes(propertyName);
+    }).replaceWith((path: ASTPath<any>) => {
+        return j.callExpression.from({
+            ...path.node,
+            callee: j.memberExpression.from({
+                ...path.node.callee,
+                property: j.identifier(
+                    toSingle(path.node.callee.property.name)
+                ),
+            }),
+        });
     });
-
-    return j.callExpression.from({
-        ...path.node,
-        callee: newCallee,
-    });
+    await next();
 };
 
-const replaceLanguageArgument = (j: JSCodeshift, path: ASTPath<any>) => {
-    const propertyName = getPropertyName(path);
-    if (propertyName !== 'locale') {
-        return;
-    }
-    const [lang, ...args] = getArguments(path);
-    if (!lang) {
-        return;
-    }
-    lang.value = lang.value.toLowerCase();
-    return j.callExpression.from({
-        ...path.node,
-        arguments: [lang, ...args],
-    })
-}
+const replaceLanguage = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    const foundLanguages = new Set<string>();
+    root.find(j.CallExpression, (path: any) => {
+        const calleeName = path.callee?.object?.name;
+        const propertyName = path.callee?.property?.name;
+        const args = path.arguments;
+        return (
+            calleeName === 'moment' && propertyName === 'locale' && args.length
+        );
+    }).replaceWith((path: any) => {
+        const [lang, ...args] = path.node.arguments;
+        lang.value = lang.value.toLowerCase();
+        foundLanguages.add(lang.value);
+        return j.callExpression.from({
+            ...path.node,
+            arguments: [lang, ...args],
+        });
+    });
 
-const replaceImportDeclaration = (j: JSCodeshift, path: ASTPath<any>) => {
-    j(path)
-        .find(j.ImportDeclaration)
+    await next();
+
+    Array.from(foundLanguages)
+        .sort()
+        .reverse()
+        .forEach((lang) => {
+            getImportStatement(j, root)?.insertAfter(
+                j.importDeclaration.from({
+                    source: j.literal(`dayjs/locale/${lang}`),
+                })
+            );
+            getRequireStatement(j, root)?.insertAfter(
+                j.expressionStatement.from({
+                    expression: j.callExpression.from({
+                        callee: j.identifier('require'),
+                        arguments: [j.literal(`dayjs/locale/${lang}`)],
+                    }),
+                })
+            );
+        });
+};
+
+// replace import statement
+// before : import moment from 'moment'
+// after  : import dayjs from 'dayjs
+const replaceImportDeclaration = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.ImportDeclaration)
         .filter((path: ASTPath<any>) => {
             const source = path.node?.source?.value;
             return source === 'moment';
@@ -188,26 +249,38 @@ const replaceImportDeclaration = (j: JSCodeshift, path: ASTPath<any>) => {
 
     // duplicate import
     const cache: any = {};
-    j(path).find(j.ImportDeclaration).filter((path) => {
-        const node = path.node;
+    root.find(j.ImportDeclaration)
+        .filter((path) => {
+            const node = path.node;
 
-        const value = node?.source?.value;
-        if (typeof value === 'string' && value === 'dayjs') {
-            if (cache[value]) {
-                return true;
+            const value = node?.source?.value;
+            if (typeof value === 'string' && value === 'dayjs') {
+                if (cache[value]) {
+                    return true;
+                }
+                cache[value] = true;
             }
-            cache[value] = true;
-        }
-        return false;
-    }).remove();
-}
+            return false;
+        })
+        .remove();
 
-const replaceRequireDeclaration = (j: JSCodeshift, path: ASTPath<any>) => {
-    j(path)
-        .find(j.VariableDeclaration)
+    await next();
+};
+
+// replace require statement
+// before : const moment = require('moment')
+// after  : const dayjs = require('dayjs')
+const replaceRequireDeclaration = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.VariableDeclaration)
         .filter((path: ASTPath<any>) => {
             const d = path?.node?.declarations?.[0];
-            return d?.init?.callee?.name === 'require' && d?.id?.name === 'moment';
+            return (
+                d?.init?.callee?.name === 'require' && d?.id?.name === 'moment'
+            );
         })
         .replaceWith((path: ASTPath<any>) => {
             return j.variableDeclaration('const', [
@@ -223,248 +296,212 @@ const replaceRequireDeclaration = (j: JSCodeshift, path: ASTPath<any>) => {
 
     // duplicate require
     const cache: any = {};
-    j(path).find(j.VariableDeclaration).filter((path) => {
-        const node = path.node;
+    root.find(j.VariableDeclaration)
+        .filter((path) => {
+            const node = path.node;
 
-        if (node.type !== 'VariableDeclaration') return false;
-        const d = node?.declarations?.[0];
-        if (d.type !== 'VariableDeclarator' || d?.init?.type !== 'CallExpression') return false;
-        const callee = d?.init?.callee;
-        if (callee.type !== 'Identifier' || d.id.type !== 'Identifier') return false;
-        if (callee.name === 'require' && d?.id?.name === 'dayjs') {
-            if (cache[d.id.name]) {
-                return true;
+            if (node.type !== 'VariableDeclaration') return false;
+            const d = node?.declarations?.[0];
+            if (
+                d.type !== 'VariableDeclarator' ||
+                d?.init?.type !== 'CallExpression'
+            )
+                return false;
+            const callee = d?.init?.callee;
+            if (callee.type !== 'Identifier' || d.id.type !== 'Identifier')
+                return false;
+            if (callee.name === 'require' && d?.id?.name === 'dayjs') {
+                if (cache[d.id.name]) {
+                    return true;
+                }
+                cache[d.id.name] = true;
             }
-            cache[d.id.name] = true;
-        }
-        return false;
-    }).remove();
-}
-
-// moment.isMoment() to dayjs.isDayjs()
-const replaceAssertFunction = (j: JSCodeshift, path: ASTPath<any>) => {
-    const propertyName = getPropertyName(path);
-    if (propertyName !== 'isMoment') {
-        return;
-    }
-    return j.callExpression.from({
-        callee: j.memberExpression.from({
-            object: j.identifier('dayjs'),
-            property: j.identifier('isDayjs'),
-        }),
-        arguments: path.node.arguments,
-    });
-}
-
-/**
- * before : get('days') / set('days', 1)
- * after  : day() / day(1)
- * @param j JSCodeshift Object
- * @param path ASTPath Object
- * @returns return new node. return null if not need to replace.
- */
-const replaceGetSetToFunction = (j: JSCodeshift, path: ASTPath<any>) => {
-    const args = path.node?.arguments;
-    if (typeof args?.[0]?.value !== 'string') {
-        return null;
-    }
-
-    const propertyName = getPropertyName(path);
-    if (
-        (propertyName === 'get' && args.length !== 1) ||
-        (propertyName === 'set' && args.length !== 2)
-    ) {
-        return null;
-    }
-
-    const newCallee = j.memberExpression.from({
-        ...path.node.callee,
-        property: j.identifier(toSingle(args[0].value)),
-    });
-    const newArgs = args.slice(1);
-
-    return j.callExpression.from({
-        ...path.node,
-        callee: newCallee,
-        arguments: newArgs,
-    });
+            return false;
+        })
+        .remove();
+    await next();
 };
 
-type Plugin = {
-    name: string;
-    properties?: string[];
-    find?: (path: ASTPath<any>) => boolean;
-    replace?: (j: JSCodeshift, path: ASTPath<any>) => CallExpression | null;
-    notImplemented?: boolean;
-};
-const plugins: Plugin[] = [
-    {
-        name: 'arraySupport',
-        find: (path: ASTPath<any>) => {
-            const callee = path.node?.callee;
-            const args = path.node?.arguments;
-            return (
-                callee?.type?.toString() === 'Identifier' &&
-                callee?.name === 'moment' &&
-                args?.[0]?.type?.toString() === 'ArrayExpression'
-            );
+const replacePlugins = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    const plugins: Plugin[] = [
+        {
+            name: 'arraySupport',
+            find: (path: ASTPath<any>) => {
+                const callee = path.node?.callee;
+                const args = path.node?.arguments;
+                return (
+                    callee?.type?.toString() === 'Identifier' &&
+                    callee?.name === 'moment' &&
+                    args?.[0]?.type?.toString() === 'ArrayExpression'
+                );
+            },
         },
-    },
-    {
-        name: 'calendar',
-        properties: ['calendar'],
-    },
-    {
-        name: 'dayOfYear',
-        properties: ['dayOfYear'],
-    },
-    {
-        name: 'duration',
-        properties: ['duration', 'isDuration', 'humanize'],
-    },
-    {
-        name: 'isBetween',
-        properties: ['isBetween'],
-    },
-    {
-        name: 'isSameOrAfter',
-        properties: ['isSameOrAfter'],
-    },
-    {
-        name: 'isSameOrBefore',
-        properties: ['isSameOrBefore'],
-    },
-    {
-        name: 'localeData',
-        properties: ['localeData'],
-    },
-    {
-        name: 'isLeapYear',
-        properties: ['isLeapYear', 'isoWeeksInYear'],
-    },
-    {
-        name: 'isoWeek',
-        properties: ['isoWeek', 'isoWeekday', 'isoWeekYear'],
-        find: (path: ASTPath<any>) => {
-            const propertyName = getPropertyName(path);
-            const args = path.node?.arguments;
-            return (
-                ['add', 'subtract', 'startOf', 'endOf'].includes(propertyName) &&
-                ['isoWeek'].includes(args?.[0]?.value)
-            );
-        }
-    },
-    {
-        name:'isoWeeksInYear',
-        properties: ['isoWeeksInYear'],
-    },
-    {
-        name: 'minMax',
-        find: (path: ASTPath<any>) => {
-            const propertyName = getPropertyName(path);
-            return (
-                ['min', 'max'].includes(propertyName) &&
-                getCalleeName(path) === 'dayjs'
-            );
-        }
-    },
-    {
-        name: 'objectSupport',
-        find: (path: ASTPath<any>) => {
-            const callee = path.node?.callee;
-            const args = path.node?.arguments;
-            const isMomentConstructor =
-                callee?.type?.toString() === 'Identifier' && callee?.name === 'moment';
-            const isObjectSupportFunction = [
-                'utc',
-                'set',
-                'add',
-                'subtract',
-            ].includes(getPropertyName(path));
-            return (
-                (isMomentConstructor || isObjectSupportFunction) &&
-                args?.[0]?.type?.toString() === 'ObjectExpression'
-            );
+        {
+            name: 'calendar',
+            properties: ['calendar'],
         },
-    },
-    {
-        name: 'quarterOfYear',
-        properties: ['quarter'],
-        find: (path: ASTPath<any>) => {
-            const propertyName = getPropertyName(path);
-            const args = path.node?.arguments;
-            return (
-                ['add', 'subtract', 'startOf', 'endOf'].includes(propertyName) &&
-                ['quarter', 'quarters'].includes(args?.[0]?.value)
-            );
-        }
-    },
-    {
-        name: 'relativeTime',
-        properties: ['from', 'fromNow', 'to', 'toNow', 'humanize'],
-    },
-    {
-        name: 'toArray',
-        properties: ['toArray'],
-    },
-    {
-        name: 'toObject',
-        properties: ['toObject'],
-    },
-    {
-        name: 'updateLocale',
-        properties: ['updateLocale'],
-    },
-    {
-        name: 'utc',
-        properties: ['utc', 'local'],
-    },
-    {
-        name: 'weekday',
-        properties: ['weekday'],
-        find: (path: ASTPath<any>) => {
-            const propertyName = getPropertyName(path);
-            const args = path.node?.arguments;
-            return (
-                ['get', 'set'].includes(propertyName) &&
-                ['weekday', 'weekdays'].includes(args?.[0]?.value)
-            );
+        {
+            name: 'dayOfYear',
+            properties: ['dayOfYear'],
         },
-        replace: replaceGetSetToFunction,
-    },
-    {
-        name: 'weekOfYear',
-        properties: ['week', 'weekYear'],
-    },
-    {
-        name: 'weekYear',
-        properties: ['weekYear'],
-    },
-];
-
-const transform: Transform = (file: FileInfo, api: API) => {
-    const j = api.jscodeshift;
-    const root = j(file.source);
-
-    // replace import statement
-    // before : import moment from 'moment'
-    // after  : import dayjs from 'dayjs
-    replaceImportDeclaration(j, root.find(j.Program).get());
-
-    // replace require statement
-    // before : const moment = require('moment')
-    // after  : const dayjs = require('dayjs')
-    replaceRequireDeclaration(j, root.find(j.Program).get());
+        {
+            name: 'duration',
+            properties: ['duration', 'isDuration', 'humanize'],
+        },
+        {
+            name: 'isBetween',
+            properties: ['isBetween'],
+        },
+        {
+            name: 'isSameOrAfter',
+            properties: ['isSameOrAfter'],
+        },
+        {
+            name: 'isSameOrBefore',
+            properties: ['isSameOrBefore'],
+        },
+        {
+            name: 'localeData',
+            properties: ['localeData'],
+        },
+        {
+            name: 'isLeapYear',
+            properties: ['isLeapYear', 'isoWeeksInYear'],
+        },
+        {
+            name: 'isoWeek',
+            properties: ['isoWeek', 'isoWeekday', 'isoWeekYear'],
+            find: (path: ASTPath<any>) => {
+                const args = path.node?.arguments;
+                return (
+                    ['add', 'subtract', 'startOf', 'endOf'].includes(
+                        path.node?.callee?.property?.name
+                    ) && ['isoWeek'].includes(args?.[0]?.value)
+                );
+            },
+        },
+        {
+            name: 'isoWeeksInYear',
+            properties: ['isoWeeksInYear'],
+        },
+        {
+            name: 'minMax',
+            find: (path: ASTPath<any>) => {
+                return (
+                    ['min', 'max'].includes(
+                        path.node?.callee?.property?.name
+                    ) && path.node?.callee?.object?.name === 'dayjs'
+                );
+            },
+        },
+        {
+            name: 'objectSupport',
+            find: (path: ASTPath<any>) => {
+                const isMomentConstructor =
+                    path.node?.callee?.type === 'Identifier' &&
+                    path.node?.callee?.name === 'moment';
+                const isObjectSupportFunction = [
+                    'utc',
+                    'set',
+                    'add',
+                    'subtract',
+                ].includes(path.node?.callee?.property?.name);
+                return (
+                    (isMomentConstructor || isObjectSupportFunction) &&
+                    path.node?.arguments?.[0]?.type?.toString() ===
+                        'ObjectExpression'
+                );
+            },
+            replace: (j: JSCodeshift, path: ASTPath<any>) => {
+                return j.callExpression.from({
+                    ...path.node,
+                    arguments: path.node.arguments.map((arg: any) => {
+                        return {
+                            ...arg,
+                            properties: arg.properties.map((p: any) => {
+                                const includeUnit = units.includes(p.key?.name);
+                                return {
+                                    ...p,
+                                    key: includeUnit
+                                        ? j.identifier(toSingle(p.key?.name))
+                                        : p.key,
+                                };
+                            }),
+                        };
+                    }),
+                });
+            },
+        },
+        {
+            name: 'quarterOfYear',
+            properties: ['quarter'],
+            find: (path: ASTPath<any>) => {
+                const args = path.node?.arguments;
+                return (
+                    ['add', 'subtract', 'startOf', 'endOf'].includes(
+                        path.node?.callee?.property?.name
+                    ) && ['quarter', 'quarters'].includes(args?.[0]?.value)
+                );
+            },
+        },
+        {
+            name: 'relativeTime',
+            properties: ['from', 'fromNow', 'to', 'toNow', 'humanize'],
+        },
+        {
+            name: 'toArray',
+            properties: ['toArray'],
+        },
+        {
+            name: 'toObject',
+            properties: ['toObject'],
+        },
+        {
+            name: 'updateLocale',
+            properties: ['updateLocale'],
+        },
+        {
+            name: 'utc',
+            properties: ['utc', 'local'],
+        },
+        {
+            name: 'weekday',
+            properties: ['weekday', 'weekdays'],
+            find: (path: ASTPath<any>) => {
+                const args = path.node?.arguments;
+                return (
+                    ['get', 'set'].includes(
+                        path.node?.callee?.property?.name
+                    ) && ['weekday', 'weekdays'].includes(args?.[0]?.value)
+                );
+            },
+        },
+        {
+            name: 'weekOfYear',
+            properties: ['week', 'weekYear'],
+        },
+        {
+            name: 'weekYear',
+            properties: ['weekYear'],
+        },
+    ];
 
     const foundPlugins = new Set<string>();
     const checkPlugins = (path: ASTPath<any>) => {
         const newPlugins = plugins.filter((plugin) => {
             if (
-                (plugin.properties && includesProperties(path, plugin.properties)) ||
+                (plugin.properties &&
+                    includesProperties(path, plugin.properties)) ||
                 plugin?.find?.(path)
             ) {
                 if (plugin.notImplemented) {
-                    throw new Error(`Not implemented plugin '${plugin.name}' found.`);
+                    throw new Error(
+                        `Not implemented plugin '${plugin.name}' found.`
+                    );
                 }
                 return true;
             }
@@ -472,19 +509,6 @@ const transform: Transform = (file: FileInfo, api: API) => {
         newPlugins.forEach((p) => foundPlugins.add(p.name));
         return newPlugins;
     };
-
-    const foundLanguages = new Set<string>();
-    const findLanguage = (path: ASTPath<any>) => {
-        const propertyName = getPropertyName(path);
-        if (propertyName !== 'locale') {
-            return;
-        }
-        const [lang] = getArguments(path);
-        if (!lang) {
-            return;
-        }
-        foundLanguages.add(lang.value.toLowerCase());
-    }
 
     // replace function and arguments
     // before : moment().xxx(1, 'days') / moment().days()
@@ -495,13 +519,7 @@ const transform: Transform = (file: FileInfo, api: API) => {
         if (type === j.CallExpression.toString()) {
             const plugins = checkPlugins(path);
             const replaceByPlugin = plugins.find((p) => p.replace)?.replace;
-            replacement =
-                replaceByPlugin?.(j, path) ||
-                replaceAssertFunction(j, path) ||
-                replaceLanguageArgument(j, path) ||
-                replaceObjectArgument(j, path) ||
-                replaceArrayArugment(j, path) ||
-                replaceUnitFunction(j, path);
+            replacement = replaceByPlugin?.(j, path);
         }
         if (path?.parentPath) {
             replace(path.parentPath);
@@ -511,139 +529,74 @@ const transform: Transform = (file: FileInfo, api: API) => {
         }
     };
 
-    // moment.now() to dayjs().valueOf()
-    root.find(j.CallExpression, {
-        callee: {
-            object: {
-                name: 'moment',
-            },
-            property: {
-                name: 'now',
-            },
-        },
-        arguments: []
-    })
-        .replaceWith( (path: ASTPath<any>) => {
-            return j.callExpression.from({
-                callee: j.memberExpression.from({
-                    object: j.callExpression.from({
-                        callee: j.identifier('dayjs'),
-                        arguments: []
-                    }),
-                    property: j.identifier('valueOf'),
-                }),
-                arguments: [],
-            });
-        });
-
-    // type
-    root.find(j.TSTypeReference, (value) => {
-        if (value?.typeName?.type === 'TSQualifiedName') {
-            const left = value.typeName.left as Identifier
-            const right = value.typeName.right as Identifier
-            if (left) {
-                return left.name === 'moment' && (right?.name === 'Moment' || right?.name === 'MomentInput');
-            }
-        }
-        if (value?.typeName?.type === 'Identifier') {
-            return value.typeName.name === 'Moment' || value.typeName.name === 'MomentInput';
-        }
-        return false;
-    })
-        .replaceWith(() => {
-            return j.tsTypeReference.from({
-                typeName: j.tsQualifiedName.from({
-                    left: j.identifier('dayjs'),
-                    right: j.identifier('Dayjs'),
-                }),
-            });
-        });
-
-    // before : moment.xxx().yyy()
-    // after  : dayjs.xxx().yyy()
     root.find(j.MemberExpression, {
         object: {
             callee: {
-                object: { name: 'moment' },
-            }
+                name: 'moment',
+            },
         },
-    })
-        .replaceWith((path: ASTPath<any>) => {
-            checkPlugins(path);
-            findLanguage(path);
-            replace(path);
-            return j.memberExpression.from({
-                ...path.node,
-                object: {
-                    ...path.node.object,
-                    callee: {
-                        ...path.node.object.callee,
-                        object: j.identifier('dayjs'),
-                    }
-                },
-            });
+    }).replaceWith((path: ASTPath<any>) => {
+        checkPlugins(path);
+        replace(path);
+        return j.memberExpression.from({
+            ...path.node,
+            object: {
+                ...path.node.object,
+                callee: j.identifier('dayjs'),
+            },
         });
+    });
 
+    root.find(j.MemberExpression, {
+        object: {
+            name: 'moment',
+        },
+    }).replaceWith((path: ASTPath<any>) => {
+        checkPlugins(path);
+        replace(path);
+        return j.memberExpression.from({
+            ...path.node,
+            object: j.identifier('dayjs'),
+        });
+    });
 
-    // replace static function
-    // before : moment.xxx()
-    // after  : dayjs.xxx()
     root.find(j.CallExpression, {
         callee: {
             object: { name: 'moment' },
         },
-    })
-        .replaceWith((path: ASTPath<any>) => {
-            checkPlugins(path);
-            findLanguage(path);
-            replace(path);
-            return j.callExpression.from({
-                ...path.node,
-                callee: j.memberExpression.from({
-                    ...path.node.callee,
-                    object: j.identifier('dayjs'),
-                }),
-            });
+    }).replaceWith((path: ASTPath<any>) => {
+        checkPlugins(path);
+        replace(path);
+        return j.callExpression.from({
+            ...path.node,
+            callee: j.memberExpression.from({
+                ...path.node.callee,
+                object: j.identifier('dayjs'),
+            }),
         });
-
+    });
 
     root.find(j.CallExpression, {
         callee: {
             name: 'moment',
         },
-    })
-        .replaceWith((path: ASTPath<any>) => {
-            checkPlugins(path);
-            findLanguage(path);
-            replace(path);
-            return j.callExpression.from({
-                ...path.node,
-                callee: j.identifier('dayjs'),
-            });
+    }).replaceWith((path: ASTPath<any>) => {
+        checkPlugins(path);
+        replace(path);
+        return j.callExpression.from({
+            ...path.node,
+            callee: j.identifier('dayjs'),
         });
-
-    root.find(j.Identifier, {
-        name: 'moment',
-    })
-        .replaceWith((path: ASTPath<any>) => {
-            return j.identifier('dayjs');
-        });
-
-    // plugins
-    const dImports = root.find(j.ImportDeclaration, {
-        source: {
-            value: 'dayjs',
-        },
     });
-    const dImport = dImports.nodes().length > 0 && dImports.at(-1).get();
+
+    await next();
+
     Array.from(foundPlugins)
         .sort()
         .reverse()
         .forEach((p) => {
-            if (!dImport) {
-                return;
-            }
-            dImport.insertAfter(
+            const importStatement = getImportStatement(j, root);
+            importStatement?.insertAfter(
                 j.expressionStatement.from({
                     expression: j.callExpression.from({
                         callee: j.memberExpression.from({
@@ -654,7 +607,7 @@ const transform: Transform = (file: FileInfo, api: API) => {
                     }),
                 })
             );
-            dImport.insertAfter(
+            importStatement?.insertAfter(
                 j.importDeclaration.from({
                     source: j.literal(`dayjs/plugin/${p}`),
                     specifiers: [
@@ -664,41 +617,9 @@ const transform: Transform = (file: FileInfo, api: API) => {
                     ],
                 })
             );
-        });
-    Array.from(foundLanguages).sort().reverse().forEach((lang) => {
-        if (!dImport) {
-            return;
-        }
-        dImport.insertAfter(
-            j.importDeclaration.from({
-                source: j.literal(`dayjs/locale/${lang}`),
-            })
-        );
-    })
 
-    const dRequires = root.find(j.VariableDeclaration, {
-        declarations: [
-            {
-                id: {
-                    name: 'dayjs'
-                },
-                init: {
-                    callee: {
-                        name: 'require'
-                    }
-                },
-            },
-        ],
-    });
-    const dRequire = dRequires.nodes().length > 0 && dRequires.at(-1).get();
-    Array.from(foundPlugins)
-        .sort()
-        .reverse()
-        .forEach((p) => {
-            if (!dRequire) {
-                return;
-            }
-            dRequire.insertAfter(
+            const requireStatement = getRequireStatement(j, root);
+            requireStatement?.insertAfter(
                 j.expressionStatement.from({
                     expression: j.callExpression.from({
                         callee: j.memberExpression.from({
@@ -709,7 +630,7 @@ const transform: Transform = (file: FileInfo, api: API) => {
                     }),
                 })
             );
-            dRequire.insertAfter(
+            requireStatement?.insertAfter(
                 j.variableDeclaration('const', [
                     j.variableDeclarator(
                         j.identifier(p),
@@ -721,19 +642,187 @@ const transform: Transform = (file: FileInfo, api: API) => {
                 ])
             );
         });
-    Array.from(foundLanguages).sort().reverse().forEach((lang) => {
-        if (!dRequire) {
-            return;
+};
+
+// before: moment.isMoment()
+// after : dayjs.isDayjs()
+const replaceAssertFunction = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.CallExpression, {
+        callee: {
+            object: {
+                name: 'moment',
+            },
+            property: {
+                name: 'isMoment',
+            },
+        },
+    }).replaceWith((path: ASTPath<any>) => {
+        return j.callExpression.from({
+            callee: j.memberExpression.from({
+                object: j.identifier('dayjs'),
+                property: j.identifier('isDayjs'),
+            }),
+            arguments: path.node.arguments,
+        });
+    });
+    await next();
+};
+
+// before : m: moment.Moment = moment()
+// after  : d: dayjs.Dayjs = dayjs()
+const replaceTypeHint = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.TSTypeReference, (path) => {
+        if (path?.typeName?.type === 'TSQualifiedName') {
+            const left = path.typeName.left as Identifier;
+            const right = path.typeName.right as Identifier;
+            if (left) {
+                return (
+                    left.name === 'moment' &&
+                    (right?.name === 'Moment' || right?.name === 'MomentInput')
+                );
+            }
         }
-        dRequire.insertAfter(
-            j.expressionStatement.from({
-                expression: j.callExpression.from({
-                    callee: j.identifier('require'),
-                    arguments: [j.literal(`dayjs/locale/${lang}`)],
-                })
-            })
+        if (path?.typeName?.type === 'Identifier') {
+            return (
+                path.typeName.name === 'Moment' ||
+                path.typeName.name === 'MomentInput'
+            );
+        }
+        return false;
+    }).replaceWith(() => {
+        return j.tsTypeReference.from({
+            typeName: j.tsQualifiedName.from({
+                left: j.identifier('dayjs'),
+                right: j.identifier('Dayjs'),
+            }),
+        });
+    });
+    await next();
+};
+
+// before : moment().now()
+// after  : dayjs().valueOf()
+const replaceNowFunction = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.CallExpression, {
+        callee: {
+            object: {
+                name: 'moment',
+            },
+            property: {
+                name: 'now',
+            },
+        },
+        arguments: [],
+    }).replaceWith((path: ASTPath<any>) => {
+        return j.callExpression.from({
+            callee: j.memberExpression.from({
+                object: j.callExpression.from({
+                    callee: j.identifier('dayjs'),
+                    arguments: [],
+                }),
+                property: j.identifier('valueOf'),
+            }),
+            arguments: [],
+        });
+    });
+    await next();
+};
+
+// before : get('days') / set('days', 1)
+// after  : day() / day(1)
+const replaceGetSetToFunction = async (
+    j: JSCodeshift,
+    root: Collection<any>,
+    next: Next
+) => {
+    root.find(j.CallExpression, (path: any) => {
+        return (
+            path.callee?.object?.callee?.name === 'moment' &&
+            ['get', 'set'].includes(path.callee?.property?.name)
         );
-    })
+    }).replaceWith((path: ASTPath<any>) => {
+        return j.callExpression.from({
+            ...path.node,
+            callee: j.memberExpression.from({
+                ...path.node.callee,
+                property: (() => {
+                    if (path.node?.arguments?.[0]?.type === 'Literal') {
+                        return j.identifier(
+                            toSingle(path.node?.arguments?.[0].value)
+                        );
+                    }
+                    return path.node.callee.property;
+                })(),
+            }),
+            arguments: (() => {
+                if (path.node?.arguments?.[0].type === 'Literal') {
+                    return path.node?.arguments?.slice(1);
+                }
+                if (path.node?.arguments?.[0]?.type === 'ObjectExpression') {
+                    path.node.arguments[0] = j.objectExpression(
+                        path.node?.arguments?.[0]?.properties.map((p: any) => {
+                            const includeUnit = multipleUnits.includes(
+                                p.key.name
+                            );
+                            return {
+                                ...p,
+                                key: includeUnit
+                                    ? j.identifier(toSingle(p.key.name))
+                                    : p.key,
+                            };
+                        })
+                    );
+                    return path.node.arguments;
+                }
+            })(),
+        });
+    });
+
+    await next();
+};
+
+const transform = async (file: FileInfo, api: API) => {
+    const jscodeshift = api.jscodeshift;
+    const root = jscodeshift(file.source);
+
+    const replacerChain = async (replaces: any[]) => {
+        const len = replaces.length;
+        const dispatch = async (i: number): Promise<void> => {
+            if (i < len) {
+                const fn = replaces[i];
+                if (fn) {
+                    await fn(jscodeshift, root, () => dispatch(i + 1));
+                }
+            }
+        };
+        await dispatch(0);
+    };
+
+    await replacerChain([
+        replaceImportDeclaration,
+        replaceRequireDeclaration,
+        replaceAssertFunction,
+        replaceTypeHint,
+        replaceNowFunction,
+        replaceUnitFunction,
+        replaceObjectArgument,
+        replaceArrayArgument,
+        replaceGetSetToFunction,
+        replaceLanguage,
+        replacePlugins,
+    ]);
 
     return root.toSource({
         trailingComma: true,
