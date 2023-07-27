@@ -1,0 +1,12 @@
+#!/usr/bin/env node
+
+const { execSync } = require('child_process');
+const path = process.argv[2] || process.cwd();
+
+const command = `npx jscodeshift --parser=tsx --extensions=js,jsx,ts,tsx --ignore-pattern=**/node_modules/** -t ${__dirname}/../transform.ts ${path}`;
+
+try {
+  execSync(command, { stdio: 'inherit' });
+} catch (error) {
+  console.error('An error occurred:', error);
+}

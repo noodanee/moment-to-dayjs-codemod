@@ -3,6 +3,9 @@
     "version": "0.0.1",
     "description": "Transforms JS/TS files from moment to dayjs",
     "main": "transform.ts",
+    "bin": {
+        "moment2dayjs": "bin/moment2dayjs"
+    },
     "author": {
         "name": "noodanee",
         "url": "https://github.com/noodanee"
@@ -11,7 +14,7 @@
     "scripts": {
         "build": "tsc transform.ts",
         "test": "NODE_OPTIONS=--experimental-vm-modules jest",
-        "transform": "jscodeshift --parser=tsx --extensions=js,jsx,ts,tsx -t transform.ts"
+        "transform": "jscodeshift --parser=tsx --extensions=js,jsx,ts,tsx --ignore-pattern=**/node_modules/** -t transform.ts"
     },
     "keywords": [
         "moment",
