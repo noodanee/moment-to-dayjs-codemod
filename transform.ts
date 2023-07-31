@@ -6,10 +6,12 @@ import {
     FileInfo,
     Identifier,
     JSCodeshift,
-    Transform,
-    VariableDeclaration,
-    VariableDeclarator,
 } from 'jscodeshift';
+
+type Context = {
+    j: JSCodeshift;
+    root: Collection<any>;
+};
 
 type Next = () => Promise<void>;
 
@@ -96,11 +98,8 @@ const getRequireStatement = (j: JSCodeshift, root: Collection<any>) => {
 
 // before : xxx({ days: 1 })
 // after  : xxx({ day: 1 })
-const replaceObjectArgument = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceObjectArgument = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.CallExpression, (path: any) => {
         return (
             path.callee?.name === 'moment' &&
@@ -133,11 +132,8 @@ const replaceObjectArgument = async (
 
 // before : xxx(1, 'days')
 // after  : xxx(1, 'day')
-const replaceArrayArgument = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceArrayArgument = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.CallExpression, (path: any) => {
         return (
             path.callee?.object?.callee?.name === 'moment' &&
@@ -158,11 +154,8 @@ const replaceArrayArgument = async (
 
 // before : days()
 // after  : day()
-const replaceUnitFunction = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceUnitFunction = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.CallExpression, (path: any) => {
         const calleeName = path.callee?.object?.callee?.name;
         if (calleeName !== 'moment') return false;
@@ -182,11 +175,8 @@ const replaceUnitFunction = async (
     await next();
 };
 
-const replaceLanguage = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceLanguage = async (context: Context, next: Next) => {
+    const { root, j } = context;
     const foundLanguages = new Set<string>();
     root.find(j.CallExpression, (path: any) => {
         const calleeName = path.callee?.object?.name;
@@ -230,11 +220,8 @@ const replaceLanguage = async (
 // replace import statement
 // before : import moment from 'moment'
 // after  : import dayjs from 'dayjs
-const replaceImportDeclaration = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceImportDeclaration = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.ImportDeclaration)
         .filter((path: ASTPath<any>) => {
             const source = path.node?.source?.value;
@@ -270,11 +257,8 @@ const replaceImportDeclaration = async (
 // replace require statement
 // before : const moment = require('moment')
 // after  : const dayjs = require('dayjs')
-const replaceRequireDeclaration = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceRequireDeclaration = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.VariableDeclaration)
         .filter((path: ASTPath<any>) => {
             const d = path?.node?.declarations?.[0];
@@ -322,11 +306,8 @@ const replaceRequireDeclaration = async (
     await next();
 };
 
-const replacePlugins = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replacePlugins = async (context: Context, next: Next) => {
+    const { root, j } = context;
     const plugins: Plugin[] = [
         {
             name: 'arraySupport',
@@ -646,11 +627,8 @@ const replacePlugins = async (
 
 // before: moment.isMoment()
 // after : dayjs.isDayjs()
-const replaceAssertFunction = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceAssertFunction = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.CallExpression, {
         callee: {
             object: {
@@ -674,11 +652,8 @@ const replaceAssertFunction = async (
 
 // before : m: moment.Moment = moment()
 // after  : d: dayjs.Dayjs = dayjs()
-const replaceTypeHint = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceTypeHint = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.TSTypeReference, (path) => {
         if (path?.typeName?.type === 'TSQualifiedName') {
             const left = path.typeName.left as Identifier;
@@ -710,11 +685,8 @@ const replaceTypeHint = async (
 
 // before : moment().now()
 // after  : dayjs().valueOf()
-const replaceNowFunction = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceNowFunction = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.CallExpression, {
         callee: {
             object: {
@@ -742,11 +714,8 @@ const replaceNowFunction = async (
 
 // before : get('days') / set('days', 1)
 // after  : day() / day(1)
-const replaceGetSetToFunction = async (
-    j: JSCodeshift,
-    root: Collection<any>,
-    next: Next
-) => {
+const replaceGetSetToFunction = async (context: Context, next: Next) => {
+    const { root, j } = context;
     root.find(j.CallExpression, (path: any) => {
         return (
             path.callee?.object?.callee?.name === 'moment' &&
@@ -798,12 +767,17 @@ const transform = async (file: FileInfo, api: API) => {
     const root = jscodeshift(file.source);
 
     const replacerChain = async (replaces: any[]) => {
+        const context: Context = {
+            j: jscodeshift,
+            root,
+        };
+
         const len = replaces.length;
         const dispatch = async (i: number): Promise<void> => {
             if (i < len) {
                 const fn = replaces[i];
                 if (fn) {
-                    await fn(jscodeshift, root, () => dispatch(i + 1));
+                    await fn(context, () => dispatch(i + 1));
                 }
             }
         };
