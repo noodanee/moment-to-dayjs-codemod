@@ -1,11 +1,13 @@
 import {
     API,
+    ASTNode,
     ASTPath,
     CallExpression,
     Collection,
     FileInfo,
     Identifier,
     JSCodeshift,
+    VariableDeclaration,
 } from 'jscodeshift';
 
 type Context = {
@@ -15,11 +17,16 @@ type Context = {
 
 type Next = () => Promise<void>;
 
+type Replacer = (context: Context, next: Next) => Promise<void>;
+
 type Plugin = {
     name: string;
     properties?: string[];
     find?: (path: ASTPath<any>) => boolean;
-    replace?: (j: JSCodeshift, path: ASTPath<any>) => CallExpression | null;
+    replace?: (
+        j: JSCodeshift,
+        path: ASTPath<CallExpression>
+    ) => ASTNode | null | undefined;
     notImplemented?: boolean;
 };
 
@@ -108,7 +115,7 @@ const replaceObjectArgument = async (context: Context, next: Next) => {
                 units.includes(arg.properties[0].key?.name)
             )
         );
-    }).replaceWith((path: ASTPath<any>) => {
+    }).replaceWith((path: ASTPath<CallExpression>) => {
         return j.callExpression.from({
             ...path.node,
             arguments: path.node.arguments.map((arg: any) => {
@@ -139,7 +146,7 @@ const replaceArrayArgument = async (context: Context, next: Next) => {
             path.callee?.object?.callee?.name === 'moment' &&
             path.arguments?.some((arg: any) => units.includes(arg.value))
         );
-    }).replaceWith((path: ASTPath<any>) => {
+    }).replaceWith((path: ASTPath<CallExpression>) => {
         return j.callExpression.from({
             ...path.node,
             arguments: path.node.arguments.map((arg: any) => {
@@ -266,7 +273,7 @@ const replaceRequireDeclaration = async (context: Context, next: Next) => {
                 d?.init?.callee?.name === 'require' && d?.id?.name === 'moment'
             );
         })
-        .replaceWith((path: ASTPath<any>) => {
+        .replaceWith((path: ASTPath<VariableDeclaration>) => {
             return j.variableDeclaration('const', [
                 j.variableDeclarator(
                     j.identifier('dayjs'),
@@ -496,7 +503,7 @@ const replacePlugins = async (context: Context, next: Next) => {
     // after  : dayjs().xxx(1, 'day') / dayjs().day()
     const replace = (path: ASTPath<any>) => {
         const type = path?.value?.type?.toString();
-        let replacement: any = null;
+        let replacement: ASTNode | null | undefined = null;
         if (type === j.CallExpression.toString()) {
             const plugins = checkPlugins(path);
             const replaceByPlugin = plugins.find((p) => p.replace)?.replace;
@@ -766,7 +773,7 @@ const transform = async (file: FileInfo, api: API) => {
     const jscodeshift = api.jscodeshift;
     const root = jscodeshift(file.source);
 
-    const replacerChain = async (replaces: any[]) => {
+    const replacerChain = async (replaces: Replacer[]) => {
         const context: Context = {
             j: jscodeshift,
             root,
