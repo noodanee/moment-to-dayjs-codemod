@@ -119,6 +119,7 @@ describe('transform', () => {
         // parameters
         moment().add(1, 'day').toDate();
         moment().add(1, 'days').toDate();
+        moment().add(1, 'days').add(1, 'days').toDate();
         const days = 1;
         moment().add(days, 'day').toDate();
 
@@ -164,6 +165,7 @@ describe('transform', () => {
         // parameters
         dayjs().add(1, 'day').toDate();
         dayjs().add(1, 'day').toDate();
+        dayjs().add(1, 'day').add(1, 'day').toDate();
         const days = 1;
         dayjs().add(days, 'day').toDate();
 
